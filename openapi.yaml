@@ -1,0 +1,216 @@
+openapi: 3.1.0
+info:
+  title: Nurix Typebot Adapter API
+  version: 0.1.0
+  description: >-
+    Public HTTP contract used by a Typebot Forge action. An operator-managed
+    ingress injects its private gateway secret before forwarding to the adapter
+    process. Listed size limits are deployment defaults and must match any
+    operator overrides.
+servers:
+  - url: https://{host}
+    variables:
+      host:
+        default: adapter.example.com
+security: []
+paths:
+  /health/live:
+    get:
+      operationId: getLiveness
+      summary: Check whether the HTTP process is alive
+      responses:
+        "200":
+          description: The process is alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Healthy"
+  /health/ready:
+    get:
+      operationId: getReadiness
+      summary: Check whether the process accepts new work
+      responses:
+        "200":
+          description: The process accepts new work.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Healthy"
+        "503":
+          description: The process is draining and does not accept new work.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotReady"
+  /v1/messages:
+    post:
+      operationId: sendMessage
+      summary: Send one user message through a persistent Nurix Chat session
+      security:
+        - NurixDataApiKey: []
+          NurixGatewayApiKey: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: Stable key for one logical message and its retries.
+          schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            pattern: "^[A-Za-z0-9._:-]+$"
+        - name: X-Request-Id
+          in: header
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+            pattern: "^[A-Za-z0-9._:-]+$"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageRequest"
+      responses:
+        "200":
+          description: Nurix returned a response.
+          headers:
+            Idempotency-Replayed:
+              description: Present with value `true` when a cached success was returned.
+              schema:
+                type: string
+                const: "true"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendMessageResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "405":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
+        "415":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "502":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+components:
+  securitySchemes:
+    NurixDataApiKey:
+      type: http
+      scheme: bearer
+      bearerFormat: Nurix Data API key
+    NurixGatewayApiKey:
+      type: apiKey
+      in: header
+      name: X-Nurix-Gateway-Api-Key
+  responses:
+    Error:
+      description: The operation failed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+  schemas:
+    Healthy:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: ok
+    NotReady:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: not_ready
+    SendMessageRequest:
+      type: object
+      additionalProperties: false
+      required: [widgetId, userId, message]
+      properties:
+        widgetId:
+          type: string
+          minLength: 1
+          maxLength: 256
+          pattern: '.*\S.*'
+        userId:
+          type: string
+          minLength: 1
+          maxLength: 512
+          pattern: '.*\S.*'
+        message:
+          type: string
+          minLength: 1
+          maxLength: 20000
+          pattern: '.*\S.*'
+    SendMessageResponse:
+      type: object
+      additionalProperties: false
+      required: [content, conversationId, messageId]
+      properties:
+        content:
+          type: string
+          maxLength: 10000
+        conversationId:
+          type: string
+          minLength: 1
+          maxLength: 512
+        messageId:
+          type: string
+          minLength: 1
+          maxLength: 512
+    ErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, safeToRetry, requestId]
+          properties:
+            code:
+              type: string
+              enum:
+                - INVALID_REQUEST
+                - UNAUTHORIZED
+                - NOT_FOUND
+                - METHOD_NOT_ALLOWED
+                - UNSUPPORTED_MEDIA_TYPE
+                - PAYLOAD_TOO_LARGE
+                - IDEMPOTENCY_CONFLICT
+                - IDEMPOTENCY_CAPACITY_REACHED
+                - SESSION_CAPACITY_REACHED
+                - SESSION_QUEUE_FULL
+                - SESSION_QUEUE_TIMEOUT
+                - SERVICE_SHUTTING_DOWN
+                - NURIX_UNAVAILABLE
+                - NURIX_REJECTED
+                - NURIX_PROTOCOL_ERROR
+                - NURIX_DELIVERY_UNKNOWN
+                - INTERNAL_ERROR
+            message:
+              type: string
+            safeToRetry:
+              type: boolean
+            requestId:
+              type: string

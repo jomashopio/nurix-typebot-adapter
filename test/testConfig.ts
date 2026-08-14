@@ -1,0 +1,30 @@
+import type { AdapterConfig } from "../src/config/parseConfig.js";
+
+export const createTestConfig = (
+  overrides: Partial<AdapterConfig> = {},
+): AdapterConfig => ({
+  host: "127.0.0.1",
+  port: 0,
+  gatewaySharedSecret: undefined,
+  nurixApiBaseUrl: new URL("https://api.example.test/agentx/"),
+  nurixWidgetOrigin: "http://localhost:3000",
+  nurixWsBaseUrl: new URL("ws://127.0.0.1"),
+  nurixConfigTimeoutMs: 500,
+  handshakeTimeoutMs: 500,
+  responseTimeoutMs: 500,
+  heartbeatIntervalMs: 10_000,
+  pongTimeoutMs: 500,
+  sessionIdleTimeoutMs: 10_000,
+  maxPayloadBytes: 1_048_576,
+  maxConfigResponseBytes: 65_536,
+  maxHttpBodyBytes: 65_536,
+  maxMessageCharacters: 20_000,
+  maxResponseCharacters: 10_000,
+  maxSessions: 100,
+  maxQueueDepth: 10,
+  queueTimeoutMs: 500,
+  idempotencyTtlMs: 60_000,
+  maxIdempotencyEntries: 100,
+  shutdownTimeoutMs: 500,
+  ...overrides,
+});

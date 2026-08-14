@@ -1,0 +1,19 @@
+services:
+  adapter:
+    build: .
+    init: true
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: ${CONTAINER_PORT:-3000}
+    ports:
+      - "127.0.0.1:${HOST_PORT:-3000}:${CONTAINER_PORT:-3000}"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: ${CONTAINER_STOP_GRACE_PERIOD:-45s}
