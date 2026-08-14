@@ -146,7 +146,7 @@ test("scopes the same idempotency key to both Nurix credentials", async () => {
   const first = await store.execute("credential-key", request, operation);
   const second = await store.execute(
     "credential-key",
-    { ...request, gatewayApiKey: "different-gateway-api-key" },
+    { ...request, gatewayApiKey: "test-different-gateway-api-key" },
     operation,
   );
 

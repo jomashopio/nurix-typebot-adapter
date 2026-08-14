@@ -136,6 +136,14 @@ Nurix currently validates the configured browser origin on both its widget confi
 
 ## Docker
 
+For the canonical hosted gateway plus private-adapter topology, use the
+[DigitalOcean App Platform deployment](./infra/app-platform/README.md). It keeps the
+adapter off the public internet and deploys the public ingress beside it on the
+same private network.
+
+The root Compose file is for local development and controlled single-host
+diagnosis only.
+
 Copy the example environment file, set `NURIX_WIDGET_ORIGIN` to an origin Nurix has allowlisted, and set a random 32-byte base64url ingress secret (43 characters without padding):
 
 ```sh

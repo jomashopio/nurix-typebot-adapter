@@ -7,3 +7,4 @@ secrets/
 *.log
 .DS_Store
 coverage/
+infra/app-platform/app.yaml

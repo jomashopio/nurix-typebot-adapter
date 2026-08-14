@@ -8,8 +8,8 @@ test("buildNurixUrl encodes path and query values", () => {
   const url = buildNurixUrl(
     new URL("wss://chat-us.nurixlabs.tech"),
     {
-      apiKey: "api key&secret",
-      gatewayApiKey: "gateway-secret",
+      apiKey: "test-api key&secret",
+      gatewayApiKey: "test-gateway-secret",
       widgetId: "widget/one",
       userId: "customer+one@example.com",
     },
@@ -23,9 +23,9 @@ test("buildNurixUrl encodes path and query values", () => {
     url.pathname,
     "/v2/chat/CHAT_WIDGET/account%2Fone/11111111-1111-4111-8111-111111111111",
   );
-  assert.equal(url.searchParams.get("api_key"), "api key&secret");
+  assert.equal(url.searchParams.get("api_key"), "test-api key&secret");
   assert.equal(url.searchParams.get("user_id"), "customer+one@example.com");
-  assert.equal(url.href.includes("gateway-secret"), false);
+  assert.equal(url.href.includes("test-gateway-secret"), false);
 });
 
 test("parseNurixFrame classifies documented and future frames", () => {

@@ -11,3 +11,4 @@ secrets
 .DS_Store
 .idea
 .vscode
+infra/app-platform/app.yaml

@@ -1,0 +1,147 @@
+name: nurix-typebot-adapter
+region: nyc
+
+alerts:
+  - rule: DEPLOYMENT_FAILED
+  - rule: DOMAIN_FAILED
+
+# Never deploy this template without replacing every __...__ placeholder.
+envs:
+  - key: GATEWAY_SHARED_SECRET
+    value: __GATEWAY_SHARED_SECRET__
+    scope: RUN_TIME
+    type: SECRET
+
+ingress:
+  rules:
+    - match:
+        path:
+          prefix: /
+      component:
+        name: gateway
+        preserve_path_prefix: true
+
+services:
+  - name: gateway
+    github:
+      repo: jomashopio/nurix-typebot-adapter
+      branch: __SOURCE_BRANCH__
+      deploy_on_push: false
+    source_dir: /
+    dockerfile_path: infra/app-platform/gateway/Dockerfile
+    http_port: 8080
+    protocol: HTTP
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    envs:
+      - key: ADAPTER_UPSTREAM
+        value: ${adapter.PRIVATE_URL}
+        scope: RUN_TIME
+        type: GENERAL
+    health_check:
+      initial_delay_seconds: 10
+      period_seconds: 10
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
+      http_path: /health/ready
+      port: 8080
+    liveness_health_check:
+      initial_delay_seconds: 10
+      period_seconds: 30
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
+      http_path: /health/live
+      port: 8080
+    termination:
+      drain_seconds: 15
+      grace_period_seconds: 105
+
+  - name: adapter
+    github:
+      repo: jomashopio/nurix-typebot-adapter
+      branch: __SOURCE_BRANCH__
+      deploy_on_push: false
+    source_dir: /
+    dockerfile_path: Dockerfile
+    internal_ports:
+      - 3000
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    envs:
+      - key: NODE_ENV
+        value: production
+        scope: RUN_TIME
+        type: GENERAL
+      - key: HOST
+        value: 0.0.0.0
+        scope: RUN_TIME
+        type: GENERAL
+      - key: PORT
+        value: "3000"
+        scope: RUN_TIME
+        type: GENERAL
+      - key: ALLOW_UNAUTHENTICATED_GATEWAY
+        value: "false"
+        scope: RUN_TIME
+        type: GENERAL
+      - key: NURIX_WIDGET_ORIGIN
+        value: __NURIX_WIDGET_ORIGIN__
+        scope: RUN_TIME
+        type: GENERAL
+      - key: NURIX_API_BASE_URL
+        value: https://api-us.nurixlabs.tech/agentx/
+        scope: RUN_TIME
+        type: GENERAL
+      - key: NURIX_WS_BASE_URL
+        value: wss://chat-us.nurixlabs.tech
+        scope: RUN_TIME
+        type: GENERAL
+      - key: QUEUE_TIMEOUT_MS
+        value: "2000"
+        scope: RUN_TIME
+        type: GENERAL
+      - key: NURIX_CONFIG_TIMEOUT_MS
+        value: "8000"
+        scope: RUN_TIME
+        type: GENERAL
+      - key: HANDSHAKE_TIMEOUT_MS
+        value: "8000"
+        scope: RUN_TIME
+        type: GENERAL
+      - key: RESPONSE_TIMEOUT_MS
+        value: "55000"
+        scope: RUN_TIME
+        type: GENERAL
+      - key: SHUTDOWN_TIMEOUT_MS
+        value: "65000"
+        scope: RUN_TIME
+        type: GENERAL
+      - key: MAX_SESSIONS
+        value: "25"
+        scope: RUN_TIME
+        type: GENERAL
+      - key: MAX_IDEMPOTENCY_ENTRIES
+        value: "500"
+        scope: RUN_TIME
+        type: GENERAL
+    health_check:
+      initial_delay_seconds: 10
+      period_seconds: 10
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
+      http_path: /health/ready
+      port: 3000
+    liveness_health_check:
+      initial_delay_seconds: 10
+      period_seconds: 30
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
+      http_path: /health/live
+      port: 3000
+    termination:
+      drain_seconds: 30
+      grace_period_seconds: 75
