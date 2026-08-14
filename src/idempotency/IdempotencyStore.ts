@@ -25,13 +25,12 @@ export class IdempotencyStore {
   ) {}
 
   execute(
-    apiKey: string,
     idempotencyKey: string,
     request: SendMessageRequest,
     operation: () => Promise<NurixReply>,
   ): Promise<{ value: NurixReply; replayed: boolean }> {
     this.removeExpired();
-    const scopedKey = `${hash(apiKey)}:${idempotencyKey}`;
+    const scopedKey = `${scopeRequest(request)}:${idempotencyKey}`;
     const fingerprint = fingerprintRequest(request);
     const existing = this.entries.get(scopedKey);
 
@@ -154,8 +153,8 @@ const fingerprintRequest = (request: SendMessageRequest) => {
   const digest = createHash("sha256");
   for (const value of [
     request.apiKey,
+    request.gatewayApiKey,
     request.widgetId,
-    request.agentId,
     request.userId,
     request.message,
   ]) {
@@ -167,5 +166,13 @@ const fingerprintRequest = (request: SendMessageRequest) => {
   return digest.digest("hex");
 };
 
-const hash = (value: string) =>
-  createHash("sha256").update(value).digest("hex");
+const scopeRequest = (request: SendMessageRequest) => {
+  const digest = createHash("sha256");
+  for (const value of [request.apiKey, request.gatewayApiKey]) {
+    digest.update(String(Buffer.byteLength(value)));
+    digest.update(":");
+    digest.update(value);
+    digest.update(";");
+  }
+  return digest.digest("hex");
+};

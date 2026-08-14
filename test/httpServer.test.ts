@@ -28,11 +28,25 @@ test("exposes minimal liveness and readiness endpoints", async (context) => {
 
 test("requires bearer authentication and never returns the credential", async (context) => {
   const fixture = await createHttpFixture(context);
-  const secret = "secret-api-key-sentinel";
+  const apiSecret = "secret-api-key-sentinel";
+  const gatewaySecret = "secret-gateway-key-sentinel";
 
-  const missing = await postMessage(fixture.url, undefined, "request-key-0001");
-  assert.equal(missing.status, 401);
-  assert.equal((await missing.text()).includes(secret), false);
+  const missingBearer = await postMessage(
+    fixture.url,
+    undefined,
+    gatewaySecret,
+    "request-key-0001",
+  );
+  const missingGateway = await postMessage(
+    fixture.url,
+    apiSecret,
+    undefined,
+    "request-key-0002",
+  );
+  assert.equal(missingBearer.status, 401);
+  assert.equal(missingGateway.status, 401);
+  assert.equal((await missingBearer.text()).includes(gatewaySecret), false);
+  assert.equal((await missingGateway.text()).includes(apiSecret), false);
 
   fixture.sender.error = new AdapterError(
     503,
@@ -42,22 +56,39 @@ test("requires bearer authentication and never returns the credential", async (c
   );
   const upstreamFailure = await postMessage(
     fixture.url,
-    secret,
-    "request-key-0002",
+    apiSecret,
+    gatewaySecret,
+    "request-key-0003",
   );
   assert.equal(upstreamFailure.status, 503);
-  assert.equal((await upstreamFailure.text()).includes(secret), false);
+  const responseBody = await upstreamFailure.text();
+  assert.equal(responseBody.includes(apiSecret), false);
+  assert.equal(responseBody.includes(gatewaySecret), false);
 });
 
 test("replays identical idempotent requests and rejects conflicting reuse", async (context) => {
   const fixture = await createHttpFixture(context);
   const apiKey = "test-api-key";
 
-  const first = await postMessage(fixture.url, apiKey, "request-key-0003");
-  const replay = await postMessage(fixture.url, apiKey, "request-key-0003");
-  const conflict = await postMessage(fixture.url, apiKey, "request-key-0003", {
-    message: "Different",
-  });
+  const first = await postMessage(
+    fixture.url,
+    apiKey,
+    "test-gateway-api-key",
+    "request-key-0004",
+  );
+  const replay = await postMessage(
+    fixture.url,
+    apiKey,
+    "test-gateway-api-key",
+    "request-key-0004",
+  );
+  const conflict = await postMessage(
+    fixture.url,
+    apiKey,
+    "test-gateway-api-key",
+    "request-key-0004",
+    { message: "Different" },
+  );
 
   assert.equal(first.status, 200);
   assert.equal(replay.status, 200);
@@ -71,7 +102,8 @@ test("rejects oversized bodies before invoking the session manager", async (cont
   const response = await postMessage(
     fixture.url,
     "test-api-key",
-    "request-key-0004",
+    "test-gateway-api-key",
+    "request-key-0005",
     { message: "x".repeat(200) },
   );
 
@@ -126,10 +158,9 @@ const createHttpFixture = async (
 const postMessage = (
   baseUrl: string,
   apiKey: string | undefined,
+  gatewayApiKey: string | undefined,
   idempotencyKey: string,
-  overrides: Partial<
-    Record<"widgetId" | "agentId" | "userId" | "message", string>
-  > = {},
+  overrides: Partial<Record<"widgetId" | "userId" | "message", string>> = {},
 ) =>
   fetch(`${baseUrl}/v1/messages`, {
     method: "POST",
@@ -137,10 +168,10 @@ const postMessage = (
       "Content-Type": "application/json",
       "Idempotency-Key": idempotencyKey,
       ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+      ...(gatewayApiKey ? { "X-Nurix-Gateway-Api-Key": gatewayApiKey } : {}),
     },
     body: JSON.stringify({
       widgetId: "widget-1",
-      agentId: "agent-1",
       userId: "customer-1",
       message: "Hello",
       ...overrides,

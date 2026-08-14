@@ -5,18 +5,27 @@ import { buildNurixUrl } from "../src/nurix/buildNurixUrl.js";
 import { parseNurixFrame } from "../src/nurix/parseNurixFrame.js";
 
 test("buildNurixUrl encodes path and query values", () => {
-  const url = buildNurixUrl(new URL("wss://chat-in.nurixlabs.tech"), {
-    apiKey: "api key&secret",
-    widgetId: "widget/one",
-    agentId: "agent two",
-    userId: "customer+one@example.com",
-  });
+  const url = buildNurixUrl(
+    new URL("wss://chat-us.nurixlabs.tech"),
+    {
+      apiKey: "api key&secret",
+      gatewayApiKey: "gateway-secret",
+      widgetId: "widget/one",
+      userId: "customer+one@example.com",
+    },
+    "account/one",
+    "11111111-1111-4111-8111-111111111111",
+  );
 
   assert.equal(url.protocol, "wss:");
-  assert.equal(url.hostname, "chat-in.nurixlabs.tech");
-  assert.equal(url.pathname, "/chat/CHAT_WIDGET/widget%2Fone/agent%20two");
+  assert.equal(url.hostname, "chat-us.nurixlabs.tech");
+  assert.equal(
+    url.pathname,
+    "/v2/chat/CHAT_WIDGET/account%2Fone/11111111-1111-4111-8111-111111111111",
+  );
   assert.equal(url.searchParams.get("api_key"), "api key&secret");
   assert.equal(url.searchParams.get("user_id"), "customer+one@example.com");
+  assert.equal(url.href.includes("gateway-secret"), false);
 });
 
 test("parseNurixFrame classifies documented and future frames", () => {
@@ -31,8 +40,8 @@ test("parseNurixFrame classifies documented and future frames", () => {
       JSON.stringify({
         response_type: "response",
         content: "Welcome",
-        conversation_id: "conversation-1",
-        message_id: "message-1",
+        conversation_id: 283216,
+        message_id: 1658331,
         is_welcome_message: true,
       }),
     ),
@@ -40,8 +49,8 @@ test("parseNurixFrame classifies documented and future frames", () => {
       type: "response",
       response: {
         content: "Welcome",
-        conversationId: "conversation-1",
-        messageId: "message-1",
+        conversationId: "283216",
+        messageId: "1658331",
       },
       isWelcomeMessage: true,
     },

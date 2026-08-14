@@ -12,8 +12,8 @@ import { createTestConfig } from "./testConfig.js";
 
 const request = {
   apiKey: "test-api-key",
+  gatewayApiKey: "test-gateway-api-key",
   widgetId: "widget-1",
-  agentId: "agent-1",
   userId: "customer-1",
 };
 
@@ -212,6 +212,38 @@ test("shutdown does not retain its full deadline after sessions close", async ()
   );
 });
 
+test("forced shutdown aborts a pending widget configuration lookup", async () => {
+  const resolutionStarted = deferred<void>();
+  let observedSignal: AbortSignal | undefined;
+  const manager = new SessionManager(
+    createTestConfig({ shutdownTimeoutMs: 10 }),
+    noopLogger,
+    (_identity, signal) => {
+      observedSignal = signal;
+      resolutionStarted.resolve();
+      return new Promise((_resolve, reject) => {
+        signal?.addEventListener(
+          "abort",
+          () => reject(new Error("configuration lookup aborted")),
+          { once: true },
+        );
+      });
+    },
+  );
+  const sendResult = manager.send({ ...request, message: "Hello" });
+  const sendRejected = assert.rejects(
+    sendResult,
+    hasErrorCode("SERVICE_SHUTTING_DOWN"),
+  );
+  await resolutionStarted.promise;
+
+  await manager.shutdown(10);
+  await sendRejected;
+
+  assert.equal(observedSignal?.aborted, true);
+  assert.equal(manager.size, 0);
+});
+
 const createManager = (
   nurixWsBaseUrl: URL,
   overrides: Parameters<typeof createTestConfig>[0] = {},
@@ -219,6 +251,7 @@ const createManager = (
   new SessionManager(
     createTestConfig({ nurixWsBaseUrl, ...overrides }),
     noopLogger,
+    async () => ({ accountId: "account-1" }),
   );
 
 const createNurixFixture = async (

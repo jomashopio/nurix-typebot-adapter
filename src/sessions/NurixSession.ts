@@ -3,6 +3,7 @@ import type { AdapterConfig } from "../config/parseConfig.js";
 import { AdapterError, normalizeAdapterError } from "../errors/AdapterError.js";
 import type { Logger } from "../logging/Logger.js";
 import { buildNurixUrl } from "../nurix/buildNurixUrl.js";
+import type { NurixWidgetResolver } from "../nurix/createNurixWidgetResolver.js";
 import { parseNurixFrame } from "../nurix/parseNurixFrame.js";
 import type { NurixReply, NurixSessionIdentity } from "../nurix/types.js";
 
@@ -20,6 +21,7 @@ type ActiveItem = QueueItem & {
 
 type SessionConfig = Pick<
   AdapterConfig,
+  | "nurixWidgetOrigin"
   | "nurixWsBaseUrl"
   | "handshakeTimeoutMs"
   | "responseTimeoutMs"
@@ -40,6 +42,7 @@ export type WebSocketFactory = (
 export class NurixSession {
   private socket: WebSocket | undefined;
   private connectPromise: Promise<void> | undefined;
+  private configResolutionAbortController: AbortController | undefined;
   private readonly queue: QueueItem[] = [];
   private readonly seenMessageIds = new Set<string>();
   private readonly seenMessageIdOrder: string[] = [];
@@ -56,6 +59,7 @@ export class NurixSession {
     readonly opaqueId: string,
     private readonly identity: NurixSessionIdentity,
     private readonly config: SessionConfig,
+    private readonly resolveWidget: NurixWidgetResolver,
     private readonly createSocket: WebSocketFactory,
     private readonly logger: Logger,
     private readonly onEvicted: (session: NurixSession) => void,
@@ -188,24 +192,39 @@ export class NurixSession {
     await this.connectPromise;
   }
 
-  private openSocket(): Promise<void> {
+  private async openSocket(): Promise<void> {
+    const abortController = new AbortController();
+    this.configResolutionAbortController = abortController;
+    let accountId: string;
+    try {
+      ({ accountId } = await this.resolveWidget(
+        this.identity,
+        abortController.signal,
+      ));
+    } finally {
+      if (this.configResolutionAbortController === abortController)
+        this.configResolutionAbortController = undefined;
+    }
+    if (this.evicted) throw unavailableError();
+
     let socket: WebSocket;
     try {
       socket = this.createSocket(
-        buildNurixUrl(this.config.nurixWsBaseUrl, this.identity),
+        buildNurixUrl(this.config.nurixWsBaseUrl, this.identity, accountId),
         {
           followRedirects: false,
           handshakeTimeout: this.config.handshakeTimeoutMs,
           maxPayload: this.config.maxPayloadBytes,
+          origin: this.config.nurixWidgetOrigin,
           perMessageDeflate: false,
         },
       );
     } catch {
-      return Promise.reject(unavailableError());
+      throw unavailableError();
     }
 
     this.socket = socket;
-    return new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       let settled = false;
       const cleanupOpeningListeners = () => {
         socket.off("open", handleOpen);
@@ -400,12 +419,14 @@ export class NurixSession {
     if (this.evicted || this.active || this.queue.length > 0) return;
     this.accepting = false;
     this.logger.info(event, { sessionId: this.opaqueId });
-    this.evict(false);
+    this.evict(event === "nurix_session_idle");
   }
 
   private evict(terminate: boolean) {
     if (this.evicted) return;
     this.evicted = true;
+    this.configResolutionAbortController?.abort();
+    this.configResolutionAbortController = undefined;
     this.clearHeartbeatTimers();
     this.clearIdleTimer();
     const socket = this.socket;

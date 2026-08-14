@@ -18,15 +18,14 @@ export const parseNurixFrame = (
   if (payload.response_type === "ping_pong") return { type: "pong" };
   if (payload.response_type !== "response") return { type: "unknown" };
 
+  const conversationId = parseIdentifier(payload.conversation_id);
+  const messageId = parseIdentifier(payload.message_id);
+
   if (
     typeof payload.content !== "string" ||
     payload.content.length > maximumContentCharacters ||
-    typeof payload.conversation_id !== "string" ||
-    payload.conversation_id.length === 0 ||
-    payload.conversation_id.length > 512 ||
-    typeof payload.message_id !== "string" ||
-    payload.message_id.length === 0 ||
-    payload.message_id.length > 512 ||
+    !conversationId ||
+    !messageId ||
     (payload.is_welcome_message !== undefined &&
       typeof payload.is_welcome_message !== "boolean")
   )
@@ -36,11 +35,19 @@ export const parseNurixFrame = (
     type: "response",
     response: {
       content: payload.content,
-      conversationId: payload.conversation_id,
-      messageId: payload.message_id,
+      conversationId,
+      messageId,
     },
     isWelcomeMessage: payload.is_welcome_message === true,
   };
+};
+
+const parseIdentifier = (value: unknown) => {
+  if (typeof value === "string" && value.length > 0 && value.length <= 512)
+    return value;
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0)
+    return String(value);
+  return undefined;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

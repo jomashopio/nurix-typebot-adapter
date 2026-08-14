@@ -3,9 +3,10 @@ info:
   title: Nurix Typebot Adapter API
   version: 0.1.0
   description: >-
-    Public HTTP contract used by a Typebot Forge action. A Nurix-controlled
-    gateway validates the bearer credential and injects its private gateway
-    secret before forwarding to the adapter process.
+    Public HTTP contract used by a Typebot Forge action. An operator-managed
+    ingress injects its private gateway secret before forwarding to the adapter
+    process. Listed size limits are deployment defaults and must match any
+    operator overrides.
 servers:
   - url: https://{host}
     variables:
@@ -46,7 +47,8 @@ paths:
       operationId: sendMessage
       summary: Send one user message through a persistent Nurix Chat session
       security:
-        - NurixApiKey: []
+        - NurixDataApiKey: []
+          NurixGatewayApiKey: []
       parameters:
         - name: Idempotency-Key
           in: header
@@ -108,10 +110,14 @@ paths:
           $ref: "#/components/responses/Error"
 components:
   securitySchemes:
-    NurixApiKey:
+    NurixDataApiKey:
       type: http
       scheme: bearer
-      bearerFormat: Nurix API key
+      bearerFormat: Nurix Data API key
+    NurixGatewayApiKey:
+      type: apiKey
+      in: header
+      name: X-Nurix-Gateway-Api-Key
   responses:
     Error:
       description: The operation failed.
@@ -139,24 +145,23 @@ components:
     SendMessageRequest:
       type: object
       additionalProperties: false
-      required: [widgetId, agentId, userId, message]
+      required: [widgetId, userId, message]
       properties:
         widgetId:
           type: string
           minLength: 1
           maxLength: 256
-        agentId:
-          type: string
-          minLength: 1
-          maxLength: 256
+          pattern: '.*\S.*'
         userId:
           type: string
           minLength: 1
           maxLength: 512
+          pattern: '.*\S.*'
         message:
           type: string
           minLength: 1
           maxLength: 20000
+          pattern: '.*\S.*'
     SendMessageResponse:
       type: object
       additionalProperties: false

@@ -43,9 +43,36 @@ test("accepts a valid gateway secret configuration", () => {
   const config = parseConfig({
     NODE_ENV: "production",
     GATEWAY_SHARED_SECRET: gatewaySharedSecret,
+    NURIX_WIDGET_ORIGIN: "https://adapter.example.com",
   });
 
   assert.equal(config.gatewaySharedSecret, gatewaySharedSecret);
+  assert.equal(config.nurixWidgetOrigin, "https://adapter.example.com");
+});
+
+test("requires a valid Nurix widget origin in production", () => {
+  assert.throws(
+    () =>
+      parseConfig({
+        NODE_ENV: "production",
+        GATEWAY_SHARED_SECRET: gatewaySharedSecret,
+      }),
+    /NURIX_WIDGET_ORIGIN is required/,
+  );
+  for (const origin of [
+    "ftp://adapter.example.com",
+    "https://adapter.example.com/path",
+    "https://user:password@adapter.example.com",
+  ])
+    assert.throws(
+      () =>
+        parseConfig({
+          NODE_ENV: "production",
+          GATEWAY_SHARED_SECRET: gatewaySharedSecret,
+          NURIX_WIDGET_ORIGIN: origin,
+        }),
+      /valid HTTP\(S\) origin/,
+    );
 });
 
 test("rejects weak or non-header-safe gateway secrets", () => {
@@ -127,13 +154,13 @@ const postMessage = (
       Authorization: "Bearer test-api-key",
       "Content-Type": "application/json",
       "Idempotency-Key": "gateway-test-key",
+      "X-Nurix-Gateway-Api-Key": "test-provider-gateway-key",
       ...(providedGatewaySecret
         ? { "X-Adapter-Gateway-Secret": providedGatewaySecret }
         : {}),
     },
     body: JSON.stringify({
       widgetId: "widget-1",
-      agentId: "agent-1",
       userId: "customer-1",
       message: "Hello",
     }),

@@ -6,8 +6,8 @@ import type { NurixReply } from "../src/nurix/types.js";
 
 const request = {
   apiKey: "test-api-key",
+  gatewayApiKey: "test-gateway-api-key",
   widgetId: "widget-1",
-  agentId: "agent-1",
   userId: "customer-1",
   message: "Hello",
 };
@@ -27,18 +27,8 @@ test("deduplicates concurrent requests while the operation is pending", async ()
     return operationResult.promise;
   };
 
-  const first = store.execute(
-    request.apiKey,
-    "concurrent-key",
-    request,
-    operation,
-  );
-  const replay = store.execute(
-    request.apiKey,
-    "concurrent-key",
-    request,
-    operation,
-  );
+  const first = store.execute("concurrent-key", request, operation);
+  const replay = store.execute("concurrent-key", request, operation);
   await Promise.resolve();
 
   assert.equal(operationCount, 1);
@@ -57,20 +47,10 @@ test("does not expire a pending operation", async () => {
     return operationResult.promise;
   };
 
-  const first = store.execute(
-    request.apiKey,
-    "pending-key",
-    request,
-    operation,
-  );
+  const first = store.execute("pending-key", request, operation);
   await Promise.resolve();
   currentTime = 101;
-  const replay = store.execute(
-    request.apiKey,
-    "pending-key",
-    request,
-    operation,
-  );
+  const replay = store.execute("pending-key", request, operation);
 
   assert.equal(operationCount, 1);
   operationResult.resolve(reply);
@@ -90,14 +70,9 @@ test("expires a settled operation after its replay window", async () => {
     });
   };
 
-  await store.execute(request.apiKey, "expiring-key", request, operation);
+  await store.execute("expiring-key", request, operation);
   currentTime = 101;
-  const second = await store.execute(
-    request.apiKey,
-    "expiring-key",
-    request,
-    operation,
-  );
+  const second = await store.execute("expiring-key", request, operation);
 
   assert.equal(operationCount, 2);
   assert.equal(second.replayed, false);
@@ -122,13 +97,13 @@ test("executes again after a retry-safe failure", async () => {
   };
 
   await assert.rejects(
-    store.execute(request.apiKey, "retryable-key", request, operation),
+    store.execute("retryable-key", request, operation),
     hasErrorCode("NURIX_UNAVAILABLE"),
   );
-  assert.deepEqual(
-    await store.execute(request.apiKey, "retryable-key", request, operation),
-    { value: reply, replayed: false },
-  );
+  assert.deepEqual(await store.execute("retryable-key", request, operation), {
+    value: reply,
+    replayed: false,
+  });
   assert.equal(operationCount, 2);
 });
 
@@ -147,14 +122,38 @@ test("caches a terminal delivery-unknown failure", async () => {
   };
 
   await assert.rejects(
-    store.execute(request.apiKey, "terminal-key", request, operation),
+    store.execute("terminal-key", request, operation),
     hasErrorCode("NURIX_DELIVERY_UNKNOWN"),
   );
   await assert.rejects(
-    store.execute(request.apiKey, "terminal-key", request, operation),
+    store.execute("terminal-key", request, operation),
     hasErrorCode("NURIX_DELIVERY_UNKNOWN"),
   );
   assert.equal(operationCount, 1);
+});
+
+test("scopes the same idempotency key to both Nurix credentials", async () => {
+  const store = new IdempotencyStore(1_000, 10);
+  let operationCount = 0;
+  const operation = () => {
+    operationCount += 1;
+    return Promise.resolve({
+      ...reply,
+      messageId: `message-${operationCount}`,
+    });
+  };
+
+  const first = await store.execute("credential-key", request, operation);
+  const second = await store.execute(
+    "credential-key",
+    { ...request, gatewayApiKey: "different-gateway-api-key" },
+    operation,
+  );
+
+  assert.equal(first.replayed, false);
+  assert.equal(second.replayed, false);
+  assert.equal(second.value.messageId, "message-2");
+  assert.equal(operationCount, 2);
 });
 
 const hasErrorCode = (code: AdapterError["code"]) => (error: unknown) => {

@@ -11,9 +11,13 @@ export type NurixFrame =
 
 export type NurixSessionIdentity = {
   apiKey: string;
+  gatewayApiKey: string;
   widgetId: string;
-  agentId: string;
   userId: string;
+};
+
+export type NurixWidgetConfig = {
+  accountId: string;
 };
 
 export type SendMessageRequest = NurixSessionIdentity & {

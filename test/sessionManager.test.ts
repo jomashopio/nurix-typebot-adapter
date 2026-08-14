@@ -10,8 +10,8 @@ import { createTestConfig } from "./testConfig.js";
 
 const request = {
   apiKey: "test-api-key",
+  gatewayApiKey: "test-gateway-api-key",
   widgetId: "widget-1",
-  agentId: "agent-1",
   userId: "customer-1",
 };
 
@@ -35,6 +35,18 @@ test("reuses one persistent socket across separate messages", async (context) =>
   const second = await manager.send({ ...request, message: "Second" });
 
   assert.equal(connectionCount, 1);
+  assert.equal(fixture.requests().length, 1);
+  assert.equal(fixture.requests()[0]?.headers.origin, "http://localhost:3000");
+  const upgradeUrl = new URL(
+    fixture.requests()[0]?.url ?? "/",
+    "ws://adapter.test",
+  );
+  assert.match(
+    upgradeUrl.pathname,
+    /^\/v2\/chat\/CHAT_WIDGET\/account-1\/[0-9a-f-]{36}$/,
+  );
+  assert.equal(upgradeUrl.searchParams.get("api_key"), request.apiKey);
+  assert.equal(upgradeUrl.searchParams.get("user_id"), request.userId);
   assert.deepEqual(messages, ["First", "Second"]);
   assert.equal(first.content, "Reply 1");
   assert.equal(second.content, "Reply 2");
@@ -142,6 +154,7 @@ const createManager = (
   new SessionManager(
     createTestConfig({ nurixWsBaseUrl, ...overrides }),
     noopLogger,
+    async () => ({ accountId: "account-1" }),
   );
 
 const createNurixFixture = async (
@@ -151,7 +164,9 @@ const createNurixFixture = async (
   const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
   await once(server, "listening");
   const clients = new Set<WebSocket>();
-  server.on("connection", (socket) => {
+  const requests: import("node:http").IncomingMessage[] = [];
+  server.on("connection", (socket, request) => {
+    requests.push(request);
     clients.add(socket);
     socket.once("close", () => clients.delete(socket));
     socket.send(
@@ -181,7 +196,11 @@ const createNurixFixture = async (
   const address = server.address();
   if (!address || typeof address === "string")
     throw new Error("Could not determine WebSocket test address.");
-  return { server, url: new URL(`ws://127.0.0.1:${address.port}`) };
+  return {
+    server,
+    requests: () => requests,
+    url: new URL(`ws://127.0.0.1:${address.port}`),
+  };
 };
 
 const responseFrame = (content: string, messageId: string) =>

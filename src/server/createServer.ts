@@ -78,11 +78,11 @@ export const createServer = ({
     const requestId = parseRequestId(request) ?? randomUUID();
     const startedAt = performance.now();
     const apiKey = parseBearerApiKey(request);
+    const gatewayApiKey = parseNurixGatewayApiKey(request);
     const idempotencyKey = parseIdempotencyKey(request);
     const requestBody = await parseRequestBody(request, config);
-    const sendRequest = { apiKey, ...requestBody };
+    const sendRequest = { apiKey, gatewayApiKey, ...requestBody };
     const { value, replayed } = await idempotencyStore.execute(
-      apiKey,
       idempotencyKey,
       sendRequest,
       () => messageSender.send(sendRequest),
@@ -149,6 +149,23 @@ const parseBearerApiKey = (request: IncomingMessage) => {
   return match[1];
 };
 
+const parseNurixGatewayApiKey = (request: IncomingMessage) => {
+  const gatewayApiKey = getSingleHeader(request, "x-nurix-gateway-api-key");
+  if (
+    !gatewayApiKey ||
+    gatewayApiKey.trim() === "" ||
+    /\s/.test(gatewayApiKey) ||
+    gatewayApiKey.length > 4_096
+  )
+    throw new AdapterError(
+      401,
+      "UNAUTHORIZED",
+      "Valid Nurix credentials are required.",
+      false,
+    );
+  return gatewayApiKey;
+};
+
 const parseIdempotencyKey = (request: IncomingMessage) => {
   const key = getSingleHeader(request, "idempotency-key");
   if (!key || !/^[A-Za-z0-9._:-]{8,128}$/.test(key))
@@ -198,13 +215,12 @@ const parseRequestBody = async (
   if (!isRecord(payload))
     throw invalidRequestError("The request body must be a JSON object.");
 
-  const allowedFields = new Set(["widgetId", "agentId", "userId", "message"]);
+  const allowedFields = new Set(["widgetId", "userId", "message"]);
   if (Object.keys(payload).some((key) => !allowedFields.has(key)))
     throw invalidRequestError("The request body contains unsupported fields.");
 
   return {
     widgetId: parseStringField(payload, "widgetId", 256),
-    agentId: parseStringField(payload, "agentId", 256),
     userId: parseStringField(payload, "userId", 512),
     message: parseStringField(payload, "message", config.maxMessageCharacters),
   };

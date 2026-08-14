@@ -2,13 +2,17 @@ export type AdapterConfig = {
   host: string;
   port: number;
   gatewaySharedSecret: string | undefined;
+  nurixApiBaseUrl: URL;
+  nurixWidgetOrigin: string | undefined;
   nurixWsBaseUrl: URL;
+  nurixConfigTimeoutMs: number;
   handshakeTimeoutMs: number;
   responseTimeoutMs: number;
   heartbeatIntervalMs: number;
   pongTimeoutMs: number;
   sessionIdleTimeoutMs: number;
   maxPayloadBytes: number;
+  maxConfigResponseBytes: number;
   maxHttpBodyBytes: number;
   maxMessageCharacters: number;
   maxResponseCharacters: number;
@@ -26,9 +30,12 @@ export const parseConfig = (
   const nodeEnvironment = environment.NODE_ENV ?? "development";
   const host = environment.HOST?.trim() || "127.0.0.1";
   const nurixWsBaseUrl = parseWebSocketUrl(
-    environment.NURIX_WS_BASE_URL ?? "wss://chat-in.nurixlabs.tech",
+    environment.NURIX_WS_BASE_URL ?? "wss://chat-us.nurixlabs.tech",
     nodeEnvironment,
     environment.ALLOW_INSECURE_WS === "true",
+  );
+  const nurixApiBaseUrl = parseHttpUrl(
+    environment.NURIX_API_BASE_URL ?? "https://api-us.nurixlabs.tech/agentx/",
   );
 
   return {
@@ -40,7 +47,19 @@ export const parseConfig = (
       environment.ALLOW_UNAUTHENTICATED_GATEWAY === "true",
       host,
     ),
+    nurixApiBaseUrl,
+    nurixWidgetOrigin: parseWidgetOrigin(
+      environment.NURIX_WIDGET_ORIGIN,
+      nodeEnvironment,
+    ),
     nurixWsBaseUrl,
+    nurixConfigTimeoutMs: parseInteger(
+      environment,
+      "NURIX_CONFIG_TIMEOUT_MS",
+      10_000,
+      100,
+      120_000,
+    ),
     handshakeTimeoutMs: parseInteger(
       environment,
       "HANDSHAKE_TIMEOUT_MS",
@@ -58,7 +77,7 @@ export const parseConfig = (
     heartbeatIntervalMs: parseInteger(
       environment,
       "HEARTBEAT_INTERVAL_MS",
-      25_000,
+      30_000,
       100,
       300_000,
     ),
@@ -79,6 +98,13 @@ export const parseConfig = (
     maxPayloadBytes: parseInteger(
       environment,
       "MAX_PAYLOAD_BYTES",
+      1_048_576,
+      1_024,
+      16_777_216,
+    ),
+    maxConfigResponseBytes: parseInteger(
+      environment,
+      "MAX_CONFIG_RESPONSE_BYTES",
       1_048_576,
       1_024,
       16_777_216,
@@ -206,4 +232,38 @@ const parseWebSocketUrl = (
     );
 
   return url;
+};
+
+const parseHttpUrl = (rawUrl: string) => {
+  const url = new URL(rawUrl);
+  if (url.protocol !== "https:")
+    throw new Error("NURIX_API_BASE_URL must use https://.");
+  if (url.username || url.password || url.search || url.hash)
+    throw new Error(
+      "NURIX_API_BASE_URL cannot include credentials, query parameters, or a fragment.",
+    );
+  if (!url.pathname.endsWith("/")) url.pathname += "/";
+  return url;
+};
+
+const parseWidgetOrigin = (
+  rawValue: string | undefined,
+  nodeEnvironment: string,
+) => {
+  if (rawValue === undefined || rawValue.trim() === "") {
+    if (nodeEnvironment === "production")
+      throw new Error("NURIX_WIDGET_ORIGIN is required in production.");
+    return undefined;
+  }
+  const url = new URL(rawValue);
+  if (
+    (url.protocol !== "https:" && url.protocol !== "http:") ||
+    url.username ||
+    url.password ||
+    url.pathname !== "/" ||
+    url.search ||
+    url.hash
+  )
+    throw new Error("NURIX_WIDGET_ORIGIN must be a valid HTTP(S) origin.");
+  return url.origin;
 };

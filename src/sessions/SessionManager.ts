@@ -3,6 +3,10 @@ import WebSocket from "ws";
 import type { AdapterConfig } from "../config/parseConfig.js";
 import { AdapterError } from "../errors/AdapterError.js";
 import type { Logger } from "../logging/Logger.js";
+import {
+  createNurixWidgetResolver,
+  type NurixWidgetResolver,
+} from "../nurix/createNurixWidgetResolver.js";
 import type { NurixReply, SendMessageRequest } from "../nurix/types.js";
 import { NurixSession, type WebSocketFactory } from "./NurixSession.js";
 
@@ -18,6 +22,9 @@ export class SessionManager implements MessageSender {
   constructor(
     private readonly config: AdapterConfig,
     private readonly logger: Logger,
+    private readonly resolveWidget: NurixWidgetResolver = createNurixWidgetResolver(
+      config,
+    ),
     private readonly createSocket: WebSocketFactory = (url, options) =>
       new WebSocket(url, options),
   ) {}
@@ -50,11 +57,12 @@ export class SessionManager implements MessageSender {
         key.slice(0, 16),
         {
           apiKey: request.apiKey,
+          gatewayApiKey: request.gatewayApiKey,
           widgetId: request.widgetId,
-          agentId: request.agentId,
           userId: request.userId,
         },
         this.config,
+        this.resolveWidget,
         this.createSocket,
         this.logger,
         (evictedSession) => {
@@ -108,7 +116,11 @@ export class SessionManager implements MessageSender {
 
 const createSessionKey = (request: SendMessageRequest) => {
   const digest = createHmac("sha256", request.apiKey);
-  for (const value of [request.widgetId, request.agentId, request.userId]) {
+  for (const value of [
+    request.gatewayApiKey,
+    request.widgetId,
+    request.userId,
+  ]) {
     digest.update(String(Buffer.byteLength(value)));
     digest.update(":");
     digest.update(value);
