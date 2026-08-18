@@ -20,6 +20,10 @@ export const parseNurixFrame = (
 
   const conversationId = parseIdentifier(payload.conversation_id);
   const messageId = parseIdentifier(payload.message_id);
+  const conversationState =
+    typeof payload.conversation_state === "string"
+      ? payload.conversation_state.trim().toLowerCase()
+      : "";
 
   if (
     typeof payload.content !== "string" ||
@@ -35,6 +39,9 @@ export const parseNurixFrame = (
     type: "response",
     response: {
       content: payload.content,
+      conversationState: /^[a-z][a-z0-9_-]{0,63}$/.test(conversationState)
+        ? conversationState
+        : "active",
       conversationId,
       messageId,
     },

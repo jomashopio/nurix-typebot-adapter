@@ -49,12 +49,23 @@ Successful response:
 ```json
 {
   "content": "Your order is on the way.",
+  "conversationState": "active",
   "conversationId": "conversation-id",
   "messageId": "message-id"
 }
 ```
 
 A successful cached replay includes `Idempotency-Replayed: true`.
+
+`conversationState` is the trimmed, lower-case Nurix `conversation_state` value
+when it matches `[a-z][a-z0-9_-]{0,63}`. Missing, malformed, or oversized values
+safely become `active`; they do not invalidate an otherwise valid response.
+Valid tokens such as `completed` and `handoff` pass through so Typebot can branch
+on them, and future valid tokens remain forward-compatible.
+
+Nurix must include `conversation_state` on the same `response` WebSocket frame as
+the final `content`, `conversation_id`, and `message_id`. A later unsolicited
+terminal event cannot resume a Typebot flow that is already waiting for input.
 
 Error response:
 
@@ -192,7 +203,7 @@ Reverse proxies should allow more than `QUEUE_TIMEOUT_MS + NURIX_CONFIG_TIMEOUT_
 
 ## Typebot integration
 
-The Forge server action should POST to the public ingress URL, await the JSON response, and map `content`, `conversationId`, and `messageId` into Typebot variables. Forge currently does not expose a durable execution/message identifier to block handlers, so the block should require a variable-capable `idempotencyKey` input that remains stable across retries. It must not generate a new key on every attempt or automatically retry an ambiguous delivery.
+The Forge server action should POST to the public ingress URL, await the JSON response, and map `content`, `conversationState`, `conversationId`, and `messageId` into Typebot variables. A Typebot condition can continue the message loop for `active`, finish it for `completed`, and route `handoff` to a separate flow. Unknown valid tokens should take a controlled fallback branch. Forge currently does not expose a durable execution/message identifier to block handlers, so the block should require a variable-capable `idempotencyKey` input that remains stable across retries. It must not generate a new key on every attempt or automatically retry an ambiguous delivery.
 
 ```ts
 const response = await fetch(`${nurixAdapterUrl}/v1/messages`, {

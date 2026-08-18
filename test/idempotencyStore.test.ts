@@ -14,6 +14,7 @@ const request = {
 
 const reply: NurixReply = {
   content: "Reply",
+  conversationState: "active",
   conversationId: "conversation-1",
   messageId: "message-1",
 };

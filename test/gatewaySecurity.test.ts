@@ -113,6 +113,7 @@ class FakeSender implements MessageSender {
     this.calls.push(request);
     return {
       content: "Reply",
+      conversationState: "active",
       conversationId: "conversation-1",
       messageId: "message-1",
     };

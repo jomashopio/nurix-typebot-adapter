@@ -49,6 +49,7 @@ test("parseNurixFrame classifies documented and future frames", () => {
       type: "response",
       response: {
         content: "Welcome",
+        conversationState: "active",
         conversationId: "283216",
         messageId: "1658331",
       },
@@ -59,6 +60,37 @@ test("parseNurixFrame classifies documented and future frames", () => {
     parseNurixFrame(JSON.stringify({ response_type: "future_event" })),
     { type: "unknown" },
   );
+});
+
+test("parseNurixFrame passes through sanitized conversation states", () => {
+  for (const [conversationState, expectedState] of [
+    ["completed", "completed"],
+    ["handoff", "handoff"],
+    ["  COMPLETED  ", "completed"],
+    ["HandOff", "handoff"],
+    ["future_state-v2", "future_state-v2"],
+    ["x".repeat(64), "x".repeat(64)],
+  ])
+    assert.equal(
+      parseResponseFrame({ conversation_state: conversationState }).response
+        .conversationState,
+      expectedState,
+    );
+});
+
+test("parseNurixFrame defaults missing or malformed conversation states to active", () => {
+  for (const conversationState of [
+    undefined,
+    null,
+    "not valid",
+    "x".repeat(65),
+    42,
+  ])
+    assert.equal(
+      parseResponseFrame({ conversation_state: conversationState }).response
+        .conversationState,
+      "active",
+    );
 });
 
 test("parseNurixFrame rejects malformed known frames without echoing payloads", () => {
@@ -101,3 +133,18 @@ test("parseNurixFrame bounds retained response content and identifiers", () => {
       },
     );
 });
+
+const parseResponseFrame = (overrides: Record<string, unknown>) => {
+  const frame = parseNurixFrame(
+    JSON.stringify({
+      response_type: "response",
+      content: "Reply",
+      conversation_id: "conversation-1",
+      message_id: "message-1",
+      ...overrides,
+    }),
+  );
+  assert.equal(frame.type, "response");
+  if (frame.type !== "response") throw new Error("Expected response frame.");
+  return frame;
+};
