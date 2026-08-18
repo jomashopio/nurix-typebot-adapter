@@ -33,7 +33,8 @@ jobs:
         run: >-
           docker build
           --file infra/app-platform/gateway/Dockerfile
-          --tag nurix-gateway:check .
+          --tag nurix-gateway:check
+          infra/app-platform/gateway
       - name: Validate public gateway configuration
         run: >-
           docker run --rm
