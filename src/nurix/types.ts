@@ -1,5 +1,6 @@
 export type NurixReply = {
   content: string;
+  conversationState: string;
   conversationId: string;
   messageId: string;
 };

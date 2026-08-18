@@ -95,6 +95,14 @@ test("replays identical idempotent requests and rejects conflicting reuse", asyn
   assert.equal(replay.headers.get("idempotency-replayed"), "true");
   assert.equal(conflict.status, 409);
   assert.equal(fixture.sender.calls.length, 1);
+  const expectedResponse = {
+    content: "Reply",
+    conversationState: "active",
+    conversationId: "conversation-1",
+    messageId: "message-1",
+  };
+  assert.deepEqual(await first.json(), expectedResponse);
+  assert.deepEqual(await replay.json(), expectedResponse);
 });
 
 test("rejects oversized bodies before invoking the session manager", async (context) => {
@@ -120,6 +128,7 @@ class FakeSender implements MessageSender {
     if (this.error) throw this.error;
     return {
       content: "Reply",
+      conversationState: "active",
       conversationId: "conversation-1",
       messageId: "message-1",
     };

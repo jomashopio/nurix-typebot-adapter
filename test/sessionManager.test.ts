@@ -52,6 +52,24 @@ test("reuses one persistent socket across separate messages", async (context) =>
   assert.equal(second.content, "Reply 2");
 });
 
+test("propagates a terminal conversation state through a session reply", async (context) => {
+  const fixture = await createNurixFixture(context, (socket, payload) => {
+    if (payload.interaction_type !== "response_required") return;
+    socket.send(responseFrame("Done", "message-completed", "completed"));
+  });
+  const manager = createManager(fixture.url);
+  context.after(() => manager.shutdown(100));
+
+  const reply = await manager.send({ ...request, message: "Finish" });
+
+  assert.deepEqual(reply, {
+    content: "Done",
+    conversationState: "completed",
+    conversationId: "conversation-1",
+    messageId: "message-completed",
+  });
+});
+
 test("serializes concurrent messages on the same socket", async (context) => {
   const received: Array<{ socket: WebSocket; text: string }> = [];
   const firstReceived = deferred<void>();
@@ -203,12 +221,17 @@ const createNurixFixture = async (
   };
 };
 
-const responseFrame = (content: string, messageId: string) =>
+const responseFrame = (
+  content: string,
+  messageId: string,
+  conversationState?: string,
+) =>
   JSON.stringify({
     response_type: "response",
     content,
     conversation_id: "conversation-1",
     message_id: messageId,
+    ...(conversationState ? { conversation_state: conversationState } : {}),
   });
 
 const deferred = <T>() => {

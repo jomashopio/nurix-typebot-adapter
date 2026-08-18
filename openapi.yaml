@@ -165,11 +165,19 @@ components:
     SendMessageResponse:
       type: object
       additionalProperties: false
-      required: [content, conversationId, messageId]
+      required: [content, conversationState, conversationId, messageId]
       properties:
         content:
           type: string
           maxLength: 10000
+        conversationState:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: "^[a-z][a-z0-9_-]{0,63}$"
+          description: >-
+            Sanitized Nurix conversation state. Defaults to `active` when the
+            upstream field is absent or malformed.
         conversationId:
           type: string
           minLength: 1
