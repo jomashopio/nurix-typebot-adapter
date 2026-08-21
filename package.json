@@ -30,7 +30,7 @@
     "ws": "8.21.3"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.4.7",
+    "@biomejs/biome": "2.5.9",
     "@types/node": "24.10.13",
     "@types/ws": "8.18.1",
     "typescript": "5.9.3"
